@@ -1,0 +1,2666 @@
+@* Copyright (c) Yuanta Securities. All rights reserved.
+	Modified By      YYYY-MM-DD
+	Andrew           2016-03-03
+	Joe              2016-08-31 - add new columns
+*@
+@using Yuanta.EBS;
+@{
+	ViewBag.Title = "Account";
+	Layout = "~/Views/Shared/_NewLayoutFull.cshtml";
+}
+
+<!--#region SearchTable-Account-->
+@{
+	var accountTable = new MvcTable<AccountEntity>(ViewBag.Title);
+	accountTable.Url = Url.Action(accountTable.Id + "Search");
+	accountTable.Pagination = true;
+	accountTable.PageSize = 10;
+	accountTable.SidePagination = Side.Server;
+	//ccountTable.ShowPaging = true;
+	accountTable.PageList = new List<int> { 5, 10, 20, 50 };
+	//accountTable.ShowToolbar = true;
+	accountTable.ShowAdd = true;
+	accountTable.ShowIndex = true;
+	accountTable.ShowTools = true;
+	accountTable.Sortable = true;
+	accountTable.ShowColumns = true;
+	accountTable.SearchButtonId = "btnSearch";
+	accountTable.GetColumn(x => x.LstTradeDate).Style.Formatter = "CustomTWDateFormatter";
+	accountTable.GetColumn(x => x.EmLstTradeDate).Style.Formatter = "CustomTWDateFormatter";
+}
+<!--#endregion-->
+<!--#region SearchTable-AccountInfo-->
+@{
+	var accountInfoTable = new MvcTable<AccountInfoEntity>(ViewBag.Title + "Info");
+
+	accountInfoTable.Url = Url.Action(accountInfoTable.Id + "Search");
+	accountInfoTable.Pagination = true;
+	accountInfoTable.PageSize = 10;
+	accountInfoTable.SidePagination = Side.Server;
+	//accountInfoTable.ShowPaging = true;
+	accountInfoTable.PageList = new List<int> { 5, 10, 20, 50 };
+	//accountInfoTable.ShowToolbar = true;
+	accountInfoTable.ShowAdd = true;
+	accountInfoTable.ShowIndex = true;
+	accountInfoTable.ShowTools = true;
+	accountInfoTable.Sortable = true;
+	accountInfoTable.ShowColumns = true;
+	accountInfoTable.SearchButtonId = "btnSearch";
+
+	accountInfoTable.Columns = GetAccountInfoColums();
+}
+
+<!--#endregion-->
+<div id="main" class="container">
+	<!--#region search-->
+	@{
+		using(var alert = Html.YAlert("", AlertStyle.Info, "autoClear")) {
+			using(var form = Html.YForm("", "", FormMethod.Post, "form-inline")) {
+				using(var row = Html.YRow()) {
+					using(var col = Html.YCol(4)) {
+
+						@ebs.GetBranch(Html, "qryBranch", true, false)
+					}
+
+					using(var col = Html.YCol(4)) {
+						@ebs.AccountInput(Html, "qryAccount", "qryBranch");
+					}
+
+					using(var col = Html.YCol(4)) {
+						Html.YButton("btnSearch",
+							"查詢", UIStyle.Primary).Render();
+					}
+				}
+			}
+		}
+	}
+	<!--#endregion-->
+	@{
+		using(var row = Html.YRow()) {
+			@Html.Raw(accountTable.Render.Table())
+		}
+		using(var row = Html.YRow()) {
+			@Html.Raw(accountInfoTable.Render.Table())
+		}
+
+		//account新增、檢視、刪除的視窗
+		using(var row = Html.YRow()) {
+			@CreateAccountModal(Html, accountTable.Id,
+		AccountEntity.__Schema.__EntityName, "Add")
+			@CreateAccountModal(Html, accountTable.Id,
+		AccountEntity.__Schema.__EntityName, "Modify")
+			@CreateAccountModal(Html, accountTable.Id,
+				AccountEntity.__Schema.__EntityName, "View")
+			@CreateAccountModal(Html, accountTable.Id,
+				AccountEntity.__Schema.__EntityName, "Remove")
+		}
+
+
+		//accountInfo新增、檢視、刪除的視窗
+		using(var row = Html.YRow()) {
+			@CreateAccountInfoModal(Html, accountInfoTable.Id,
+		AccountInfoEntity.__Schema.__EntityName, "Add")
+
+			@CreateAccountInfoModal(Html, accountInfoTable.Id,
+				AccountInfoEntity.__Schema.__EntityName, "Modify")
+			accountInfoTable.AjaxModifyUrl = "/System/AccountInfoModify";
+			@CreateAccountInfoModal(Html, accountInfoTable.Id,
+				AccountInfoEntity.__Schema.__EntityName, "View")
+
+			@CreateAccountInfoModal(Html, accountInfoTable.Id,
+				AccountInfoEntity.__Schema.__EntityName, "Remove")
+		}
+	}
+
+</div>
+
+@section CssJs{
+	@Html.Raw(accountTable.Render.JavaScript())
+	@Html.Raw(accountTable.Render.Modal.AddModalJavaScript())
+	@Html.Raw(accountTable.Render.Modal.ModifyModalJavaScript())
+	@Html.Raw(accountTable.Render.Modal.RemoveModalJavaScript())
+
+
+	@Html.Raw(accountInfoTable.Render.JavaScript())
+	@Html.Raw(accountInfoTable.Render.Modal.AddModalJavaScript())
+	@Html.Raw(accountInfoTable.Render.Modal.ModifyModalJavaScript())
+	@Html.Raw(accountInfoTable.Render.Modal.RemoveModalJavaScript())
+
+	<script>
+		var accountInitComplete=false;
+		var accountInfoInitiComplete=false;
+		function RecToGUIAccount(rowData,prefix,id)
+		{
+			for (n in rowData) {
+				//資料與頁面binding
+				if (document.getElementById(id+n)) {
+
+					$('#' + id + n).val(rowData[n]);
+
+					if(n.toLowerCase().indexOf("date")>-1 && n!="BdModDate")
+					{
+						if (Date.parse(rowData[n]).toTW() != '-011/01/01') {
+							$('#' + id + n).val(Date.parse(rowData[n]).toTW());
+						} else {
+							$('#' + id + n).val('');
+						}
+					}
+				}
+
+				if (prefix == 'View' || prefix == 'Remove'){
+					$('#' + id + n).attr("disabled", true);
+				}
+
+				if (prefix == 'Modify')
+				{
+					if(n== 'AccountId'
+                        || n == 'DiscountFlag'
+                        || n== 'ComMRateType'
+                        ) {
+						$('#' + id + n).attr("disabled", true);
+					}
+				}
+			}
+		}
+
+
+		function RecToGUIAccountInfo(rowData,prefix,id)
+		{
+			for (n in rowData) {
+				//資料與頁面binding
+				if (document.getElementById(id+n)) {
+
+					$('#' + id + n).val(rowData[n]);
+
+					if(n.toLowerCase().indexOf("date")>-1 && n!="BdModDate")
+					{
+
+						if (Date.parse(rowData[n]).toTW() != '-011/01/01') {
+							$('#' + id + n).val(Date.parse(rowData[n]).toTW());
+						} else {
+							$('#' + id + n).val('');
+						}
+					}
+					if(n=='Birthday'
+                        )
+					{
+						if (Date.parse(rowData[n])!=null) {
+							$('#' + id + n).val(Date.parse(rowData[n]).toTW());
+						} else {
+							$('#' + id + n).val(rowData[n]);
+						}
+					}
+
+					if(n=='AgreementSBLFuHwa'
+                       || n=='ClosureSBLFuHwa'
+                       || n=='ClosureSBL'
+                       || n=='AgreementSBL'
+                       )
+					{
+						if (Date.parse(rowData[n]).toTW() != '-011/01/01') {
+							$('#' + id + n).val(Date.parse(rowData[n]).toTW());
+						} else {
+							$('#' + id + n).val('');
+						}
+					}
+
+				}
+
+				if (prefix == 'View' || prefix == 'Remove'){
+					$('#' + id + n).attr("disabled", true);
+				}
+				if (prefix == 'Modify')
+				{
+					if(n== 'AccountId'
+                        ) {
+						$('#' + id + n).attr("disabled", true);
+					}
+				}
+			}
+		}
+
+		function clearValidator(jqForm) {
+			jqForm[0].reset();
+			if (jqForm.data('bootstrapValidator')){
+				jqForm.data().bootstrapValidator.resetForm();
+			}
+		}
+
+
+		function BirthdayToTw(value, row, index) {
+			if(value==null){return};
+			return $.yuanta.formatter.date.tw(value);
+		}
+
+		function CustomTWDateFormatter(value) {
+			if(value == '0001-01-01T00:00:00') {
+				return '';
+			}
+			return new Date(value).toTW().replace('-','前 ');
+		}
+		function FmtOpenSrc(value, row, index) {
+		    if(value === null){
+		        return ''
+		    }
+		    else if(value == 'P'){
+		        return '臨櫃';
+		    }
+		    else if(value == 'E'){
+		        return 'EC';
+		    }
+		    else{
+		        return '';
+		    }
+		}
+
+		$(function () {
+			window.queryParams@(accountTable.Id) = function queryParams@(accountTable.Id)(params) {
+				$.yuanta.message.removeAll();
+				return $.extend(
+                    params,
+                    {
+                    	qryBranch: $('#qryBranch').val(),
+                    	qryAccount: $('#qryAccount').val(),
+
+                    }
+                );
+			};
+			window.onAdd@(accountTable.Id) = function ($_table) {
+				var jqForm = $('#' + $_table.options.id + '_Add');
+				clearValidator(jqForm);
+			}
+			window.@(accountTable.Function.OnRowModify) = function ($_table,rowData,$_element) {
+				var prefix="Modify";
+				var id = '@accountTable.Id' +'_'+ prefix+'_' + '@accountTable.Schema.__EntityName' + '_';
+				var jqForm = $('#' + $_table.options.id +'_'+ prefix);
+				clearValidator(jqForm);
+				RecToGUIAccount(rowData,prefix,id);
+			};
+
+			window.@(accountTable.Function.OnRowView) = function ($_table,
+                rowData,
+                $_element) {
+				var prefix="View";
+				var id = '@accountTable.Id' +'_'+ prefix+'_' + '@accountTable.Schema.__EntityName' + '_';
+				RecToGUIAccount(rowData,prefix,id);
+			}
+
+			window.@(accountTable.Function.OnRowRemove) = function ($_table,
+                rowData,
+                $_element) {
+				var prefix="Remove";
+				var id = '@accountTable.Id' +'_'+ prefix+'_' + '@accountTable.Schema.__EntityName' + '_';
+				RecToGUIAccount(rowData,prefix,id);
+
+
+			}
+
+			window.@(accountTable.Function.OnBeforeInit) = function ($table)
+			{
+				accountInitComplete=false;
+				$.yuanta.block();
+				return true;
+			};
+
+			window.@(accountTable.Function.OnAfterInit) = function ($table)
+			{
+				accountInitComplete=true;
+				if(accountInitComplete
+                    && accountInfoInitiComplete
+                    )
+				{
+					$.yuanta.unblock();
+				}
+
+				return true;
+			};
+		});
+
+
+
+		$(function () {
+			window.queryParams@(accountInfoTable.Id) = function queryParams@(accountInfoTable.Id)(params) {
+				$.yuanta.message.removeAll();
+				return $.extend(
+                    params,
+                    {
+                    	qryBranch: $('#qryBranch').val(),
+                    	qryAccount: $('#qryAccount').val(),
+
+                    }
+                );
+			};
+			window.@(accountInfoTable.Function.OnBeforeInit) = function ($table)
+			{
+				accountInfoInitiComplete=false;
+				$.yuanta.block();
+				return true;
+			};
+
+			window.@(accountInfoTable.Function.OnAfterInit) = function ($table)
+			{
+				accountInfoInitiComplete=true;
+				if(accountInitComplete
+                  && accountInfoInitiComplete
+                  )
+				{
+					$.yuanta.unblock();
+				}
+				return true;
+			};
+
+			window.onAdd@(accountInfoTable.Id) = function ($_table) {
+				var jqForm = $('#' + $_table.options.id + '_Add');
+				clearValidator(jqForm);
+			}
+
+			window.@(accountInfoTable.Function.OnRowModify) = function ($_table,rowData,$_element) {
+				var prefix="Modify";
+				var id = '@accountInfoTable.Id' +'_'+ prefix+'_' + '@accountInfoTable.Schema.__EntityName' + '_';
+				var jqForm = $('#' + $_table.options.id +'_'+ prefix);
+				clearValidator(jqForm);
+				RecToGUIAccountInfo(rowData,prefix,id);
+			};
+
+			window.@(accountInfoTable.Function.OnRowView) = function ($_table,
+				rowData,
+				$_element) {
+				var prefix="View";
+				var id = '@accountInfoTable.Id' +'_'+ prefix+'_' + '@accountInfoTable.Schema.__EntityName' + '_';
+				RecToGUIAccountInfo(rowData,prefix,id);
+			}
+
+			window.@(accountInfoTable.Function.OnRowRemove) = function ($_table,
+				rowData,
+				$_element) {
+				var prefix="Remove";
+				var id = '@accountInfoTable.Id' +'_'+ prefix+'_' + '@accountInfoTable.Schema.__EntityName' + '_';
+				RecToGUIAccountInfo(rowData,prefix,id);
+			}
+
+		});
+	</script>
+}
+
+<!--#region AccountAdd-->
+@helper CreateAccountModal(
+		System.Web.Mvc.HtmlHelper html,
+			string tableID,
+			string entityName,
+			string mode
+	)
+{
+var formName = string.Format("{0}_{1}", tableID, mode);
+var modalName = string.Format("{0}-yuanta-tale-{1}-modal",
+	tableID, mode.ToLower());
+var colPrefix = string.Format("{0}_{1}_{2}_",
+	tableID, mode, entityName);
+var modeName = string.Empty;
+var btnSaveName = string.Empty;
+var btnCancelName = string.Empty;
+var isShowBtnSave = false;
+switch(mode) {
+	case "Add":
+		modeName = "新增";
+		btnSaveName = "儲存";
+		btnCancelName = "取消";
+		isShowBtnSave = true;
+		break;
+	case "Modify":
+		modeName = "修改";
+		btnSaveName = "儲存";
+		btnCancelName = "取消";
+		isShowBtnSave = true;
+		break;
+	case "Remove":
+		modeName = "刪除";
+		btnSaveName = "確認";
+		btnCancelName = "取消";
+		isShowBtnSave = true;
+		break;
+	case "View":
+		modeName = "檢視";
+		btnCancelName = "離開";
+		isShowBtnSave = false;
+		break;
+}
+
+using(var form = html.YForm(formName, "", FormMethod.Post)) {
+	using(var modal = html.YModal(modalName, modeName + "客戶帳號",
+		 true, btnCancelName, isShowBtnSave, btnSaveName)) {
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("帳戶代碼", colPrefix + "AccountId")) {
+					html.YText(colPrefix + "AccountId", string.Empty).Render();
+				}
+			}
+
+
+			using(var col = html.YCol(6)) {
+
+				using(var fg = html.YFormGroup("彈性手續費率旗標", colPrefix + "ComMRateType")) {
+					html.YSelect<Ref.CommRateType>(colPrefix + "ComMRateType").Render();
+				}
+			}
+		}
+
+		using(var row = html.YRow()) {
+
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("有無申請日折手續費客戶", colPrefix + "DiscountFlag")) {
+					html.YSelect<Ref.DiscountFlag>(colPrefix + "DiscountFlag").Render();
+				}
+			}
+
+			using(var col = html.YCol(6)) {
+					@ebs.GetBranch(Html, colPrefix + "Branch", false, false)
+			}
+		}
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("客戶代碼", colPrefix + "ClientId")) {
+					html.YText(colPrefix + "ClientId", string.Empty).Render();
+				}
+			}
+
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("交易帳戶", colPrefix + "Account")) {
+					html.YText(colPrefix + "Account", string.Empty).Render();
+				}
+			}
+
+		}
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("檢查碼", colPrefix + "ChkNo")) {
+					html.YText(colPrefix + "ChkNo", string.Empty).Render();
+				}
+			}
+
+
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("子帳戶", colPrefix + "SubAct")) {
+					html.YText(colPrefix + "SubAct", string.Empty).Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("交易營業員", colPrefix + "AECode")) {
+					html.YText(colPrefix + "AECode", string.Empty).Render();
+				}
+			}
+
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("對方下單代號", colPrefix + "SubInd")) {
+					html.YText(colPrefix + "SubInd", string.Empty).Render();
+				}
+			}
+		}
+
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("主帳戶代碼", colPrefix + "MainActId")) {
+					html.YText(colPrefix + "MainActId", string.Empty).Render();
+				}
+			}
+
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("母帳戶代碼", colPrefix + "MotherActId")) {
+					html.YText(colPrefix + "MotherActId", string.Empty).Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("全委機構代碼", colPrefix + "PIInstId")) {
+					html.YText(colPrefix + "PIInstId", string.Empty).Render();
+				}
+			}
+
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("投信投顧代號", colPrefix + "CodeDcbf")) {
+					html.YText(colPrefix + "CodeDcbf", string.Empty).Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("集中開戶旗標", colPrefix + "TSEOpenFlag")) {
+					html.YSelect<Ref.YN>(colPrefix + "TSEOpenFlag", SelectType.NotRequired).Render();
+				}
+			}
+
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("集中狀態", colPrefix + "TSEClientState")) {
+					html.YSelect<Ref.TSEClientState>(colPrefix + "TSEClientState", SelectType.NotRequired).Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("櫃檯開戶旗標", colPrefix + "OTCOpenFlag")) {
+					html.YSelect<Ref.YN>(colPrefix + "OTCOpenFlag", SelectType.NotRequired).Render();
+				}
+			}
+
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("櫃檯狀態", colPrefix + "OTCClientState")) {
+					html.YSelect<Ref.OTCClientState>(colPrefix + "OTCClientState", SelectType.NotRequired).Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("興櫃開戶旗標", colPrefix + "EmergOpenFlag")) {
+					html.YSelect<Ref.YN>(colPrefix + "EmergOpenFlag", SelectType.NotRequired).Render();
+				}
+			}
+
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("興櫃狀態", colPrefix + "EmergChgType")) {
+					html.YSelect<Ref.EmergChgType>(colPrefix + "EmergChgType", SelectType.NotRequired).Render();
+				}
+			}
+		}
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("集保開戶旗標", colPrefix + "TSCDOpenFlag")) {
+					html.YSelect<Ref.YN>(colPrefix + "TSCDOpenFlag", SelectType.NotRequired).Render();
+				}
+			}
+
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("庫存檢核旗標", colPrefix + "CustodyChk")) {
+					html.YSelect<Ref.CustodyChk>(colPrefix + "CustodyChk", SelectType.NotRequired).Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("劃撥開戶旗標", colPrefix + "TrnsfOpenFlag")) {
+					html.YSelect<Ref.YN>(colPrefix + "TrnsfOpenFlag", SelectType.NotRequired).Render();
+				}
+			}
+
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("TSE認購權證簽署旗標", colPrefix + "TSEWarrSignFlag")) {
+					html.YSelect<Ref.YN>(colPrefix + "TSEWarrSignFlag", SelectType.NotRequired).Render();
+				}
+			}
+
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("OTC認購權證簽署旗標", colPrefix + "OTCWarrSignFlag")) {
+					html.YSelect<Ref.YN>(colPrefix + "OTCWarrSignFlag", SelectType.NotRequired).Render();
+				}
+			}
+
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("海外權證簽署旗標", colPrefix + "OverSeaWarrSignFlag")) {
+					html.YSelect<Ref.YN>(colPrefix + "OverSeaWarrSignFlag", SelectType.NotRequired).Render();
+				}
+			}
+
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("牛熊證簽署旗標", colPrefix + "CBBCWarrSingFlag")) {
+
+					html.YSelect<Ref.YN>(colPrefix + "CBBCWarrSingFlag", SelectType.NotRequired).Render();
+				}
+			}
+
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("第一上市(櫃)風險股票簽署旗標", colPrefix + "FirstRMSignFlag")) {
+					html.YSelect<Ref.FirstRMSignFlag>(colPrefix + "FirstRMSignFlag", SelectType.NotRequired).Render();
+				}
+			}
+
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("第二上市(櫃)風險股票簽署旗標", colPrefix + "SecondRMSignFlag")) {
+					html.YSelect<Ref.FirstRMSignFlag>(colPrefix + "SecondRMSignFlag", SelectType.NotRequired).Render();
+				}
+			}
+
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("興櫃新風險預告書簽屬旗標", colPrefix + "EmergRMSignFlag")) {
+					html.YSelect<Ref.YN>(colPrefix + "EmergRMSignFlag", SelectType.NotRequired).Render();
+				}
+			}
+
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("興櫃新風險預告書買進生效旗標", colPrefix + "EmergRMsBuyFlag")) {
+					html.YSelect<Ref.YN>(colPrefix + "EmergRMsBuyFlag", SelectType.NotRequired).Render();
+				}
+			}
+
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("(上市櫃)最後交易日", colPrefix + "LstTradeDate")) {
+					html.YDatePicker(colPrefix + "LstTradeDate", "").Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("最後交易營業員員編", colPrefix + "TradeSalesUserId")) {
+					html.YText(colPrefix + "TradeSalesUserId", "").Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("最後交易營業員代碼", colPrefix + "TradeSalesId")) {
+					html.YText(colPrefix + "TradeSalesId", "").Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("郵寄對帳啟用旗標", colPrefix + "ReconStaOnFlag")) {
+					html.YSelect<Ref.YN>(colPrefix + "ReconStaOnFlag", SelectType.NotRequired).Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("免辦交割申請旗標", colPrefix + "PsnSettOnFlag")) {
+					html.YSelect<Ref.YN>(colPrefix + "PsnSettOnFlag", SelectType.NotRequired).Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("申購簽署旗標", colPrefix + "SubscrSignFlag")) {
+					html.YSelect<Ref.SubscrSignFlag>(colPrefix + "SubscrSignFlag", SelectType.NotRequired).Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("電子交易風險簽署旗標", colPrefix + "ETradeSignFlag")) {
+					html.YSelect<Ref.YN>(colPrefix + "ETradeSignFlag", SelectType.NotRequired).Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("DMA開戶旗標", colPrefix + "DMAOpenFlag")) {
+					html.YSelect<Ref.YN>(colPrefix + "DMAOpenFlag", SelectType.NotRequired).Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("網際網路申請旗標", colPrefix + "IntNetOpenFlag")) {
+					html.YSelect<Ref.IntNetChgType>(colPrefix + "IntNetOpenFlag", SelectType.NotRequired).Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("是否不需檢核現金", colPrefix + "TradeByTrade")) {
+					html.YSelect<Ref.TradeByTrade>(colPrefix + "TradeByTrade", SelectType.NotRequired).Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("均價計算旗標", colPrefix + "STPCal")) {
+					html.YSelect<Ref.STPCal>(colPrefix + "STPCal", SelectType.NotRequired).Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("QFII 的法人代碼", colPrefix + "ClientCode")) {
+					html.YText(colPrefix + "ClientCode", "").Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("QFII 的客戶子帳代碼", colPrefix + "SubAcctCode")) {
+					html.YText(colPrefix + "SubAcctCode", "").Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("客戶主要證金公司", colPrefix + "SFId")) {
+					html.YSelect<Ref.SFId>(colPrefix + "SFId", SelectType.NotRequired).Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("投資上限", colPrefix + "InvQtaAmt")) {
+					html.YText(colPrefix + "InvQtaAmt", "").Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("交割額度", colPrefix + "SettQtaAmt")) {
+					html.YText(colPrefix + "SettQtaAmt", "").Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("興櫃額度", colPrefix + "EmergQtaAmt")) {
+					html.YText(colPrefix + "EmergQtaAmt", "").Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("電子下單額度", colPrefix + "ECOrdQtaAmt")) {
+					html.YText(colPrefix + "ECOrdQtaAmt", "").Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("身份別", colPrefix + "CliSubType")) {
+					html.YText(colPrefix + "CliSubType", string.Empty).Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("客戶類別(大)", colPrefix + "CliType")) {
+					html.YSelect<Ref.CliType>(colPrefix + "CliType", SelectType.NotRequired).Render();
+				}
+			}
+
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("是否課徵二代健保補充保費", colPrefix + "PremiumsFlag")) {
+					html.YSelect<Ref.PremiumsFlag>(colPrefix + "PremiumsFlag", SelectType.NotRequired).Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("現股沖銷排序旗標", colPrefix + "SortReversalFlag")) {
+					html.YSelect<Ref.SortReversalFlag>(colPrefix + "SortReversalFlag", SelectType.NotRequired).Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("信用沖銷排序旗標", colPrefix + "MarSortReversalFlag")) {
+					html.YSelect<Ref.MarSortReversalFlag>(colPrefix + "MarSortReversalFlag", SelectType.NotRequired).Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("期貨公司代碼", colPrefix + "FIBBrh")) {
+					html.YText(colPrefix + "FIBBrh", "").Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("T-1日 OTA分配旗標", colPrefix + "T1ota")) {
+					html.YSelect<Ref.T_1OTA>(colPrefix + "T1ota", SelectType.NotRequired).Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("現股當沖狀態", colPrefix + "DTdClientState")) {
+					html.YSelect<Ref.DTdClientState>(colPrefix + "DTdClientState", SelectType.NotRequired).Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("成本中心", colPrefix + "CostCenter")) {
+					html.YText(colPrefix + "CostCenter", "").Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("客戶簡稱", colPrefix + "Name")) {
+					html.YText(colPrefix + "Name", "").Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("它國股票來台掛牌風險預告書旗標", colPrefix + "FgnListSTKFlg")) {
+					html.YSelect<Ref.YN>(colPrefix + "FgnListSTKFlg", SelectType.NotRequired).Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("槓桿/反向ETF簽署旗標", colPrefix + "LIETFFlag")) {
+					html.YSelect<Ref.YN>(colPrefix + "LIETFFlag", SelectType.NotRequired).Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("期貨(黃金)ETF簽署旗標", colPrefix + "FutETFFlag")) {
+					html.YSelect<Ref.YN>(colPrefix + "FutETFFlag", SelectType.NotRequired).Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("黃金現貨簽署旗標", colPrefix + "GoldSpotFlag")) {
+					html.YSelect<Ref.YN>(colPrefix + "GoldSpotFlag", SelectType.NotRequired).Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("外幣商品狀態", colPrefix + "FgnCState")) {
+					html.YText(colPrefix + "FgnCState", "").Render();
+				}
+			}
+		}
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("(興櫃)最後交易日", colPrefix + "EmLstTradeDate")) {
+					html.YDatePicker(colPrefix + "EmLstTradeDate", "").Render();
+				}
+			}
+
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("主帳號旗標", colPrefix + "FgMainAct")) {
+					html.YSelect<Ref.FgMainAct>(colPrefix + "FgMainAct", SelectType.NotRequired).Render();
+				}
+			}
+		}
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("人民幣ETF簽署旗標", colPrefix + "RMBETFOpenFlag")) {
+					html.YSelect<Ref.YN>(colPrefix + "RMBETFOpenFlag", SelectType.NotRequired).Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("[期信]槓桿/反向ETF簽署旗標", colPrefix + "FUTLiETFSignFlag")) {
+					html.YSelect<Ref.YN>(colPrefix + "FUTLiETFSignFlag", SelectType.NotRequired).Render();
+				}
+			}
+		}
+	}
+}
+if(mode != "Add") {
+	using(var row = html.YRow()) {
+		using(var col = Html.YCol(6)) {
+				<input type="text" class="form-control inline " id="@(colPrefix + "BdModDate")" name="@(colPrefix + "BdModDate")" style="display: none;" value="" placeholder="">
+		}
+	}
+}
+	<script>
+		AddAsyncFunction(
+            function @(formName)_validator(){
+            	var $form = $('#@(formName)');
+
+            	var @(formName)_rule = function(kind,inputMax,inputMin,inputDigits){
+            		switch(kind)
+            		{
+
+            			case "dateValid":
+            				var dateValid={
+            					validators: {
+            						twEra: { message: '日期格式錯誤' }
+            					}
+            				};
+            				return dateValid;
+            				break;
+            			case "numberText":
+            				var numberTextValid={
+            					validators: {
+            						stringLength: {
+            							max: inputMax,
+            							message: '長度最大'+inputMax+'位'
+            						},
+            						regexp:project.validators.numberOnly
+            					}
+            				};
+            				return numberTextValid;
+            				break;
+            			case "numberAZOnly":
+            				var numberTextValid={
+            					validators: {
+            						stringLength: {
+            							max: inputMax,
+            							message: '長度最大'+inputMax+'位'
+            						},
+            						regexp:project.validators.numberAZOnly
+            					}
+            				};
+            				return numberTextValid;
+            				break;
+            			case "noChinese":
+            				var numberWithCommaOrNotValid={
+            					validators: {
+            						stringLength: {
+            							max: inputMax,
+            							message: '長度最大'+inputMax+'位'
+            						},
+            						regexp:{
+            							message:'不得為中文',
+            							regexp:/[^\u4e00-\u9fa5]/
+            						}
+            					}
+            				};
+            				return numberWithCommaOrNotValid;
+            				break;
+            			case "numberWithDigits":
+            				var numberWithDigitsValid={
+            					validators: {
+            						lessThan:project.validators.number(inputMin,inputMax,true),
+            						regexp:project.validators.numberWithDigits(inputDigits)
+            					}
+            				};
+            				return numberWithDigitsValid;
+            				break;
+            			case "length":
+            				var lengthValid={
+            					validators: {
+            						stringLength: {
+            							max: inputMax,
+            							message: '長度最大'+inputMax+'位'
+            						},
+            					}
+            				};
+            				return lengthValid;
+            				break;
+            			case "required":
+            				var requiredValid={
+            					validators: {
+            						notEmpty:project.validators.required
+            					}
+            				};
+            				return requiredValid;
+            				break;
+            		}
+            	}
+
+            	var number14Max=100000000000000;
+
+            	$form.bootstrapValidator('addField', '@(colPrefix)EmLstTradeDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ClientId', @(formName)_rule("numberAZOnly",14,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)Account', @(formName)_rule("numberAZOnly",6,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ChkNo', @(formName)_rule("numberAZOnly",1,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)SubAct', @(formName)_rule("numberAZOnly",10,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)AECode', @(formName)_rule("numberAZOnly",3,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)SubInd', @(formName)_rule("numberAZOnly",20,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)MainActId', @(formName)_rule("numberAZOnly",14,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)MotherActId', @(formName)_rule("numberAZOnly",3,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)MotherActId', @(formName)_rule("numberAZOnly",14,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)PIInstId', @(formName)_rule("numberAZOnly",10,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)CodeDcbf', @(formName)_rule("numberAZOnly",8,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)LstTradeDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)TradeSalesUserId', @(formName)_rule("numberAZOnly",8,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)TradeSalesId', @(formName)_rule("numberAZOnly",5,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ClientCode', @(formName)_rule("numberAZOnly",14,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)SubAcctCode', @(formName)_rule("numberAZOnly",20,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)InvQtaAmt', @(formName)_rule("numberWithDigits",number14Max,null,2));
+            	$form.bootstrapValidator('addField', '@(colPrefix)SettQtaAmt', @(formName)_rule("numberWithDigits",number14Max,null,2));
+            	$form.bootstrapValidator('addField', '@(colPrefix)EmergQtaAmt', @(formName)_rule("numberWithDigits",number14Max,null,2));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ECOrdQtaAmt', @(formName)_rule("numberWithDigits",number14Max,null,2));
+            	$form.bootstrapValidator('addField', '@(colPrefix)FIBBrh', @(formName)_rule("noChinese",7,null,2));
+            	$form.bootstrapValidator('addField', '@(colPrefix)CostCenter', @(formName)_rule("numberAZOnly",10,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)Name', @(formName)_rule("length",80,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)FgnCState', @(formName)_rule("length",1,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)AccountId', @(formName)_rule("required",14,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)DiscountFlag', @(formName)_rule("required",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ComMRateType', @(formName)_rule("required",null,null,null));
+
+            	$form.data('bootstrapValidator').options.excluded = [':disabled']
+            });
+	</script>
+}
+<!--#endregion-->
+<!--#region AccountInfoAdd-->
+@helper CreateAccountInfoModal(
+		   System.Web.Mvc.HtmlHelper html,
+				string tableID,
+				string entityName,
+				string mode
+	)
+{
+var formName = string.Format("{0}_{1}", tableID, mode);
+var modalName = string.Format("{0}-yuanta-tale-{1}-modal",
+	tableID, mode.ToLower());
+var colPrefix = string.Format("{0}_{1}_{2}_",
+	tableID, mode, entityName);
+var modeName = string.Empty;
+var btnSaveName = string.Empty;
+var btnCancelName = string.Empty;
+var isShowBtnSave = false;
+switch(mode) {
+	case "Add":
+		modeName = "新增";
+		btnSaveName = "儲存";
+		btnCancelName = "取消";
+		isShowBtnSave = true;
+		break;
+	case "Modify":
+		modeName = "修改";
+		btnSaveName = "儲存";
+		btnCancelName = "取消";
+		isShowBtnSave = true;
+		break;
+	case "Remove":
+		modeName = "刪除";
+		btnSaveName = "確認";
+		btnCancelName = "取消";
+		isShowBtnSave = true;
+		break;
+	case "View":
+		modeName = "檢視";
+		btnCancelName = "離開";
+		isShowBtnSave = false;
+		break;
+}
+
+using(var form = html.YForm(formName, "", FormMethod.Post)) {
+	using(var modal = html.YModal(modalName, modeName + "客戶帳號",
+		 true, btnCancelName, isShowBtnSave, btnSaveName)) {
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("帳戶代碼", colPrefix + "AccountId")) {
+					html.YText(colPrefix + "AccountId", "").Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("客戶類別(大)", colPrefix + "CliType")) {
+					html.YSelect<Ref.CliType>(colPrefix + "CliType", SelectType.NotRequired).Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("身份別(細)", colPrefix + "CliSubType")) {
+					html.YText(colPrefix + "CliSubType", string.Empty).Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("全委機構代碼", colPrefix + "PIInstId")) {
+					html.YText(colPrefix + "PIInstId", "").Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("客戶簡稱", colPrefix + "Name")) {
+					html.YText(colPrefix + "Name", "").Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("身份證字號", colPrefix + "IdNo")) {
+					html.YText(colPrefix + "IdNo", "").Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("身份證字號強迫碼", colPrefix + "IdNoChk")) {
+					html.YSelect<Ref.YN>(colPrefix + "IdNoChk", SelectType.NotRequired).Render();
+				}
+			}
+			using(var col = html.YCol(6)) {
+				using(var fg = html.YFormGroup("稅籍編號", colPrefix + "TaxNo")) {
+					html.YText(colPrefix + "TaxNo", "").Render();
+				}
+			}
+		}
+
+
+		using(var row = html.YRow()) {
+			using(var col = html.YCol(6)) {
+					@ebs.GetBranch(Html, colPrefix + "Branch", false, false)
+
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("交易帳戶", colPrefix + "Account")) {
+                        html.YText(colPrefix + "Account", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("檢查碼", colPrefix + "ChkNo")) {
+                        html.YText(colPrefix + "ChkNo", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("子帳戶", colPrefix + "SubAct")) {
+                        html.YText(colPrefix + "SubAct", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("是否為主帳戶", colPrefix + "FgMainAct")) {
+                        html.YSelect<Ref.FgMainAct>(colPrefix + "FgMainAct", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("客戶全名", colPrefix + "FullName")) {
+                        html.YText(colPrefix + "FullName", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("英文名稱", colPrefix + "NameEn")) {
+                        html.YText(colPrefix + "NameEn", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("出生年月日", colPrefix + "Birthday")) {
+                        html.YDatePicker(colPrefix + "Birthday", "").Render();
+                        //html.YText(colPrefix + "Birthday", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("性別", colPrefix + "Gender")) {
+                        html.YSelect<Ref.Gender>(colPrefix + "Gender", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("職業代碼", colPrefix + "BusinesSid")) {
+                        html.YText(colPrefix + "BusinesSid", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("公司名稱", colPrefix + "ComPany")) {
+                        html.YText(colPrefix + "ComPany", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("職稱代碼", colPrefix + "TitleId")) {
+                        html.YText(colPrefix + "TitleId", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("客戶來源", colPrefix + "SrcType")) {
+                        html.YSelect<Ref.SrcType>(colPrefix + "SrcType", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("介紹人姓名", colPrefix + "Introducer")) {
+                        html.YText(colPrefix + "Introducer", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("註記", colPrefix + "Memo")) {
+                        html.YText(colPrefix + "Memo", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("教育程度", colPrefix + "EduLvl")) {
+                        html.YText(colPrefix + "EduLvl", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("工作地點", colPrefix + "WorkArea")) {
+                        html.YText(colPrefix + "WorkArea", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("戶籍地", colPrefix + "RegAddr80")) {
+                        html.YText(colPrefix + "RegAddr80", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("通訊地", colPrefix + "ComAddr80")) {
+                        html.YText(colPrefix + "ComAddr80", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("引薦人員編號", colPrefix + "ReCommEndUserId")) {
+                        html.YText(colPrefix + "ReCommEndUserId", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("外國人員工戶旗標(Y-員工, N-否)", colPrefix + "FEmpFlag")) {
+                        html.YSelect<Ref.FEmpFlag>(colPrefix + "FEmpFlag", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("集中開戶營業員員編 (7碼)", colPrefix + "OpenSalesUserId")) {
+                        html.YText(colPrefix + "OpenSalesUserId", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("集中開戶營業員代碼 (3碼)", colPrefix + "OpenSalesId")) {
+                        html.YText(colPrefix + "OpenSalesId", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("集中開戶日", colPrefix + "TSEOpenDate")) {
+                        html.YDatePicker(colPrefix + "TSEOpenDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("集中狀態異動日", colPrefix + "TSEChageDate")) {
+                        html.YDatePicker(colPrefix + "TSEChageDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("集中狀態變動註記(lastest)", colPrefix + "TSECStateMemo")) {
+                        html.YText(colPrefix + "TSECStateMemo", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("集中檔案傳送旗標(FT)", colPrefix + "TSESentFlag")) {
+                        html.YSelect<Ref.TSESentFlag>(colPrefix + "TSESentFlag", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("櫃檯開戶日", colPrefix + "OTCOpenDate")) {
+                        html.YDatePicker(colPrefix + "OTCOpenDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("櫃檯狀態異動日", colPrefix + "OTCChageDate")) {
+                        html.YDatePicker(colPrefix + "OTCChageDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("櫃檯狀態變動註記(lastest)", colPrefix + "OTCCStateMemo")) {
+                        html.YText(colPrefix + "OTCCStateMemo", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("櫃檯中心傳送旗標(FT)", colPrefix + "OTCSentFlag")) {
+                        html.YSelect<Ref.OTCSentFlag>(colPrefix + "OTCSentFlag", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("劃撥開戶日期(款)", colPrefix + "TrnsfOpenDate")) {
+                        html.YDatePicker(colPrefix + "TrnsfOpenDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("劃撥異動日期(款) ", colPrefix + "TrnsfChangEDate")) {
+                        html.YDatePicker(colPrefix + "TrnsfChangEDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("集保開戶日(券)", colPrefix + "TSCDOpenDate")) {
+                        html.YDatePicker(colPrefix + "TSCDOpenDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("集保解約日(券)", colPrefix + "TSCDCloseDate")) {
+                        html.YDatePicker(colPrefix + "TSCDCloseDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("領摺日期", colPrefix + "TSCDBookDate")) {
+                        html.YDatePicker(colPrefix + "TSCDBookDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("集保最近傳檔日(FT)", colPrefix + "TSCDSentDate")) {
+                        html.YDatePicker(colPrefix + "TSCDSentDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("集保傳送旗標(FT)", colPrefix + "TSCDSentFlag")) {
+                        html.YSelect<Ref.TscdSentFlag>(colPrefix + "TSCDSentFlag", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("郵寄對帳啟用日期(同新開戶日期)", colPrefix + "ReconStaOnDate")) {
+                        html.YDatePicker(colPrefix + "ReconStaOnDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("郵寄對帳取消日期(同銷戶日期)", colPrefix + "ReconStaOffDate")) {
+                        html.YDatePicker(colPrefix + "ReconStaOffDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("TSE認購權證簽署日期", colPrefix + "TSEWarrSignDate")) {
+                        html.YDatePicker(colPrefix + "TSEWarrSignDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("TSE認購權證解約日期", colPrefix + "TSEWarrSOffDate")) {
+                        html.YDatePicker(colPrefix + "TSEWarrSOffDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("申購簽署日期", colPrefix + "SubscrSignDate")) {
+                        html.YDatePicker(colPrefix + "SubscrSignDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("申購解約日期", colPrefix + "SubscrSOffDate")) {
+                        html.YDatePicker(colPrefix + "SubscrSOffDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("免辦交割申請日(親臨)", colPrefix + "PsnSettOnDate")) {
+                        html.YDatePicker(colPrefix + "PsnSettOnDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("免辦交割取消日(親臨)", colPrefix + " ")) {
+                        html.YDatePicker(colPrefix + "PsnSettOffDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(興櫃)開戶營業員員編 (7碼)", colPrefix + "EmergSalesUserId")) {
+                        html.YText(colPrefix + "EmergSalesUserId", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(興櫃)開戶營業員代碼 (3碼)", colPrefix + "EmergOpenSalesId")) {
+                        html.YText(colPrefix + "EmergOpenSalesId", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("興櫃開戶日期=簽署日", colPrefix + "EmergOpenDate")) {
+                        html.YDatePicker(colPrefix + "EmergOpenDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("興櫃狀態異動日期", colPrefix + "EmergChangEDate")) {
+                        html.YDatePicker(colPrefix + "EmergChangEDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("興櫃狀態變動註記(lastest)", colPrefix + "EmergCStateMemo")) {
+                        html.YText(colPrefix + "EmergCStateMemo", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("OTC認購權證簽署日期", colPrefix + "OTCWarrSignDate")) {
+                        html.YDatePicker(colPrefix + "OTCWarrSignDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("OTC認購權證解約日期", colPrefix + "OTCWarrSOffDate")) {
+                        html.YDatePicker(colPrefix + "OTCWarrSOffDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("電子交易風險簽署日", colPrefix + "ETradeSignDate")) {
+                        html.YDatePicker(colPrefix + "ETradeSignDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("簽署來源", colPrefix + "ETradeSignType")) {
+
+                        html.YText(colPrefix + "ETradeSignType", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("DMA開戶日", colPrefix + "DMAOpenDate")) {
+                        html.YDatePicker(colPrefix + "DMAOpenDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("DMA異動日 ", colPrefix + "DMAChangEDate")) {
+                        html.YDatePicker(colPrefix + "DMAChangEDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("DMA交易所檔案傳送旗標", colPrefix + "DMATSESendFlag")) {
+                        html.YSelect<Ref.TscdSentFlag>(colPrefix + "DMATSESendFlag", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("DMA櫃買傳送旗標(FT)", colPrefix + "DMAOTCSendFlag")) {
+                        html.YSelect<Ref.TscdSentFlag>(colPrefix + "DMAOTCSendFlag", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("興櫃新風險預告書簽屬日", colPrefix + "EmergRMSignDate")) {
+                        html.YDatePicker(colPrefix + "EmergRMSignDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("興櫃新風險預告書註銷日", colPrefix + "EmergRMsOffDate")) {
+                        html.YDatePicker(colPrefix + "EmergRMsOffDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("興櫃新風險預告書買進生效日", colPrefix + "EmergRMsBuyDate")) {
+                        html.YDatePicker(colPrefix + "EmergRMsBuyDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("第一上市(櫃)風險股票預告書", colPrefix + "FirstRMSignFlag")) {
+                        html.YSelect<Ref.FirstRMSignFlag>(colPrefix + "FirstRMSignFlag", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("第一上市(櫃)風險股票簽署日", colPrefix + "FirstRMSignDate")) {
+                        html.YDatePicker(colPrefix + "FirstRMSignDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("借券風險預告書簽屬日", colPrefix + "AgreementSBL")) {
+                        html.YDatePicker(colPrefix + "AgreementSBL", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("借券風險預告書註銷日期", colPrefix + "ClosureSBL")) {
+                        html.YDatePicker(colPrefix + "ClosureSBL", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("借券(復華)風險預告書簽署日期", colPrefix + "AgreementSBLFuHwa")) {
+                        html.YDatePicker(colPrefix + "AgreementSBLFuHwa", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("借券(復華)風險預告書註銷日期", colPrefix + "ClosureSBLFuHwa")) {
+                        html.YDatePicker(colPrefix + "ClosureSBLFuHwa", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("網際網路申請日期", colPrefix + "IntNetOpenDate")) {
+                        html.YDatePicker(colPrefix + "IntNetOpenDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("網際網路異動日期", colPrefix + "IntNetChangEDate")) {
+                        html.YDatePicker(colPrefix + "IntNetChangEDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("網際網路狀態", colPrefix + "IntNetChgType")) {
+                        html.YSelect<Ref.IntNetChgType>(colPrefix + "IntNetChgType", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("網際網路狀態變動註記(lastest)", colPrefix + "IntNetCStateMemo")) {
+                        html.YText(colPrefix + "IntNetCStateMemo", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("網際網路密碼 (歷史,未用)", colPrefix + "IntNetPwd")) {
+                        html.YText(colPrefix + "IntNetPwd", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("語音查詢密碼(歷史,未用)", colPrefix + "VoiceQryPwd")) {
+                        html.YText(colPrefix + "VoiceQryPwd", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("集保語音密碼", colPrefix + "TSCDVoicePwd")) {
+                        html.YText(colPrefix + "TSCDVoicePwd", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("網路下單", colPrefix + "WebOrdFlag")) {
+                        html.YSelect<Ref.WebOrdFlag>(colPrefix + "WebOrdFlag", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("電商旗標", colPrefix + "ECChnnlType")) {
+                        html.YSelect<Ref.ECChnnlType>(colPrefix + "ECChnnlType", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("9887專用旗標", colPrefix + "QFIICliChk")) {
+                        html.YSelect<Ref.QFIICliChk>(colPrefix + "QFIICliChk", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("承銷簽屬旗標", colPrefix + "SubscrSignFlag")) {
+                        html.YSelect<Ref.SubscrSignFlag>(colPrefix + "SubscrSignFlag", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("資券盈虧列印旗標", colPrefix + "CRDBProfFlag")) {
+                        html.YSelect<Ref.CRDBProfFlag>(colPrefix + "CRDBProfFlag", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("YESWIN證券下單免確認申請日", colPrefix + "YSWDate")) {
+                        html.YDatePicker(colPrefix + "YSWDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("DMA線路提供者 ", colPrefix + "DMAProvider")) {
+                        html.YSelect<Ref.DMAProvider>(colPrefix + "DMAProvider", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("客戶版本", colPrefix + "DVFlag")) {
+                        html.YSelect<Ref.DVFlag>(colPrefix + "DVFlag", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("信託戶上市傳送旗標(FT)", colPrefix + "TSETrUstsFlag")) {
+                        html.YSelect<Ref.TSETrustSFlag>(colPrefix + "TSETrUstsFlag", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("信託戶OTC傳送旗標(FT)", colPrefix + "OTCTrUstsFlag")) {
+                        html.YSelect<Ref.OTCTrustSFlag>(colPrefix + "OTCTrUstsFlag", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(戶籍)國別", colPrefix + "RegTMCodeId")) {
+                        html.YText(colPrefix + "RegTMCodeId", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(戶籍)郵遞區號", colPrefix + "RegZipCode")) {
+                        html.YText(colPrefix + "RegZipCode", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(戶籍)縣市", colPrefix + "RegCounty")) {
+                        html.YText(colPrefix + "RegCounty", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(戶籍)鄉鎮市區", colPrefix + "RegDistrict")) {
+                        html.YText(colPrefix + "RegDistrict", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(戶籍)里鄰", colPrefix + "RegNbHood")) {
+                        html.YText(colPrefix + "RegNbHood", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(戶籍)路段", colPrefix + "RegRdsec")) {
+                        html.YText(colPrefix + "RegRdsec", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(戶籍)巷弄號", colPrefix + "RegAddrNo")) {
+                        html.YText(colPrefix + "RegAddrNo", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(戶籍)註記", colPrefix + "RegAddrMemo")) {
+                        html.YText(colPrefix + "RegAddrMemo", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(戶籍)是否為郵政信箱", colPrefix + "RegBoxFlag")) {
+                        html.YSelect<Ref.CustodyChk>(colPrefix + "RegBoxFlag", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(通訊)國別", colPrefix + "ComTMCodeId")) {
+                        html.YText(colPrefix + "ComTMCodeId", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(通訊)郵遞區號", colPrefix + "ComZipCode")) {
+                        html.YText(colPrefix + "ComZipCode", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(通訊)縣市", colPrefix + "ComCounty")) {
+                        html.YText(colPrefix + "ComCounty", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(通訊)鄉鎮市區", colPrefix + "ComDistrict")) {
+                        html.YText(colPrefix + "ComDistrict", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(通訊)里鄰", colPrefix + "ComNbHood")) {
+                        html.YText(colPrefix + "ComNbHood", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(通訊)路段", colPrefix + "ComRdsec")) {
+                        html.YText(colPrefix + "ComRdsec", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(通訊)巷弄號", colPrefix + "ComAddrNo")) {
+                        html.YText(colPrefix + "ComAddrNo", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(通訊)註記", colPrefix + "ComAddrMemo")) {
+                        html.YText(colPrefix + "ComAddrMemo", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(通訊)是否為郵政信箱", colPrefix + "ComBoxFlag")) {
+                        html.YSelect<Ref.YN>(colPrefix + "ComBoxFlag", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("戶籍地整理旗標", colPrefix + "RegNrmFlag")) {
+                        html.YSelect<Ref.RegNrmFlag>(colPrefix + "RegNrmFlag", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("通訊地整理旗標", colPrefix + "ComNrmFlag")) {
+                        html.YSelect<Ref.ComNrmFlag>(colPrefix + "ComNrmFlag", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("戶籍地址衝突", colPrefix + "XRegNrmFlag")) {
+                        html.YSelect<Ref.XRegNrmFlag>(colPrefix + "XRegNrmFlag", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("通訊地址衝突", colPrefix + "XComNrmFlag")) {
+                        html.YSelect<Ref.XComNrmFlag>(colPrefix + "XComNrmFlag", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("戶籍地址第三行政區─錯誤", colPrefix + "YRegNrmFlag")) {
+                        html.YSelect<Ref.YRegNrmFlag>(colPrefix + "YRegNrmFlag", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("通訊地址第三行政區─錯誤", colPrefix + "YComNrmFlag")) {
+                        html.YSelect<Ref.YComNrmFlag>(colPrefix + "YComNrmFlag", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("權證下單旗標", colPrefix + "WarrOrdFlag")) {
+                        html.YSelect<Ref.YN>(colPrefix + "WarrOrdFlag", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("預收款項放棄利息同意", colPrefix + "PAmtNoIntFlag")) {
+                        html.YSelect<Ref.PAmtNoIntFlag>(colPrefix + "PAmtNoIntFlag", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("當日違約公告日期", colPrefix + "TDefDate")) {
+                        html.YDatePicker(colPrefix + "TDefDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("二代健保補充保費-免代扣-起日", colPrefix + "IWNoWhdBegDate")) {
+                        html.YDatePicker(colPrefix + "IWNoWhdBegDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("二代健保補充保費-免代扣-迄日", colPrefix + "IWNoWhdEndDate")) {
+                        html.YDatePicker(colPrefix + "IWNoWhdEndDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("借券狀態", colPrefix + "SBClientState")) {
+                        html.YSelect<Ref.SBClientState>(colPrefix + "SBClientState", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("借券(上次)違約日期", colPrefix + "SBDefDate")) {
+                        html.YDatePicker(colPrefix + "SBDefDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(外國投資人)轉換狀態", colPrefix + "FIDsCrtState")) {
+                        html.YSelect<Ref.FIDscrtState>(colPrefix + "FIDsCrtState", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(外國投資人)一般轉全委日期", colPrefix + "FIDsCrtDate")) {
+                        html.YDatePicker(colPrefix + "FIDsCrtDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("(外國投資人) 全委轉一般日期", colPrefix + "FINoRMDate")) {
+                        html.YDatePicker(colPrefix + "FINoRMDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("現股當沖-簽署日", colPrefix + "DTdSignDate")) {
+                        html.YDatePicker(colPrefix + "DTdSignDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("現股當沖-生效日", colPrefix + "DTdOpenDate")) {
+                        html.YDatePicker(colPrefix + "DTdOpenDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("現股當沖-異動日", colPrefix + "DTdChangEDate")) {
+                        html.YDatePicker(colPrefix + "DTdChangEDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("現股當沖狀態變動註記(lastest)", colPrefix + "DTdCStateMemo")) {
+                        html.YText(colPrefix + "DTdCStateMemo", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("上市現股當沖", colPrefix + "DTdTSESentFlag")) {
+                        html.YSelect<Ref.DTdSentFlag>(colPrefix + "DTdTSESentFlag", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("上櫃現股當沖", colPrefix + "DTdOTCSentFlag")) {
+                        html.YSelect<Ref.DTdSentFlag>(colPrefix + "DTdOTCSentFlag", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("現股當沖是否專業投資機構", colPrefix + "DTdPiiFlag")) {
+                        html.YSelect<Ref.DTdPIIFlag>(colPrefix + "DTdPiiFlag", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("現股當沖簽署來源", colPrefix + "DTdSignSrc")) {
+                        html.YSelect<Ref.DTdSignSrc>(colPrefix + "DTdSignSrc", SelectType.NotRequired).Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("成本中心", colPrefix + "CostCenter")) {
+                        html.YText(colPrefix + "CostCenter", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("槓桿/反向ETF簽署生效日", colPrefix + "LIETFOpenDate")) {
+                        html.YDatePicker(colPrefix + "LIETFOpenDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("槓桿/反向ETF簽署來源", colPrefix + "LIETFSignSrc")) {
+                        html.YSelect<Ref.DTdSignSrc>(colPrefix + "LIETFSignSrc", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("期貨(黃金)ETF簽署生效日", colPrefix + "FutETFOpenDate")) {
+                        html.YDatePicker(colPrefix + "FutETFOpenDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("期貨(黃金)ETF簽署來源", colPrefix + "FutETFSignSrc")) {
+                        html.YSelect<Ref.DTdSignSrc>(colPrefix + "FutETFSignSrc", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("黃金現貨簽署生效日", colPrefix + "GoldSpotOpenDate")) {
+                        html.YDatePicker(colPrefix + "GoldSpotOpenDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("黃金現貨簽署來源", colPrefix + "GoldSpotSignSrc")) {
+                        html.YSelect<Ref.DTdSignSrc>(colPrefix + "GoldSpotSignSrc", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("外幣商品啟用日", colPrefix + "FgnCOpenDate")) {
+                        html.YDatePicker(colPrefix + "FgnCOpenDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("現股當沖借入簽署日", colPrefix + "DtdINSignDate")) {
+                        html.YDatePicker(colPrefix + "DtdINSignDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("現股當沖借入生效日", colPrefix + "DtdINOpenDate")) {
+                        html.YDatePicker(colPrefix + "DtdINOpenDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("現股當沖借入註銷日", colPrefix + "DtdINSOffDate")) {
+                        html.YDatePicker(colPrefix + "DtdINSOffDate", "").Render();
+                    }
+                }
+            }
+
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("現股當沖借出簽署日", colPrefix + "DtdOUTSignDate")) {
+                        html.YDatePicker(colPrefix + "DtdOUTSignDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("現股當沖借出生效日", colPrefix + "DtdOUTOpenDate")) {
+                        html.YDatePicker(colPrefix + "DtdOUTOpenDate", "").Render();
+                    }
+                }
+            }
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("現股當沖借出註銷日", colPrefix + "DtdOUTSOffDate")) {
+                        html.YDatePicker(colPrefix + "DtdOUTSOffDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("現股當沖券差簽署來源", colPrefix + "DTdIOSignSrc")) {
+                        html.YSelect<Ref.DTdSignSrc>(colPrefix + "DTdIOSignSrc", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("人民幣ETF簽署生效日", colPrefix + "RMBETFOpenDate")) {
+                        html.YDatePicker(colPrefix + "RMBETFOpenDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("人民幣ETF簽署來源", colPrefix + "RMBETFSignSrc")) {
+                        html.YSelect<Ref.DTdSignSrc>(colPrefix + "RMBETFSignSrc", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+
+            using(var row = html.YRow()) {
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("[期信]槓桿/反向ETF簽署日", colPrefix + "FUTLiETFSignDate")) {
+                        html.YDatePicker(colPrefix + "FUTLiETFSignDate", "").Render();
+                    }
+                }
+                using(var col = html.YCol(6)) {
+                    using(var fg = html.YFormGroup("[期信]槓桿/反向ETF簽署旗標", colPrefix + "FUTLiETFSignSrc")) {
+                        html.YSelect<Ref.DTdSignSrc>(colPrefix + "FUTLiETFSignSrc", SelectType.NotRequired).Render();
+                    }
+                }
+            }
+            using (var row = html.YRow())
+            {
+                using (var col = Html.YCol(6))
+                {
+                    using (var fg = html.YFormGroup("開戶來源", colPrefix + "OpenSrc"))
+                    {
+                        var debtType = new List<Any>();
+                        debtType.Add("P", "臨櫃");
+                        debtType.Add("E", "EC");
+                        Html.YSelect(colPrefix + "OpenSrc", debtType.ToArray()).Render();
+                    }
+                }
+            }
+            if (mode != "Add") {
+                using(var row = html.YRow()) {
+                    using(var col = Html.YCol(6)) {
+						<input type="text" class="form-control inline " id="@(colPrefix + "BdModDate")" name="@(colPrefix + "BdModDate")" style="display: none;" value="" placeholder="">
+				}
+			}
+		}
+	}
+
+}
+	<script>
+		AddAsyncFunction(
+            function @(formName)_validator(){
+            	var $form = $('#@(formName)');
+
+
+            	var @(formName)_rule = function(kind,inputMax,inputMin,inputDigits){
+            		switch(kind)
+            		{
+
+            			case "dateValid":
+            				var dateValid={
+            					validators: {
+            						twEra: { message: '日期格式錯誤' }
+            					}
+            				};
+            				return dateValid;
+            				break;
+            			case "numberText":
+            				var numberTextValid={
+            					validators: {
+            						stringLength: {
+            							max: inputMax,
+            							message: '長度最大'+inputMax+'位'
+            						},
+            						regexp:project.validators.numberOnly
+            					}
+            				};
+            				return numberTextValid;
+            				break;
+            			case "numberAZOnly":
+            				var numberTextValid={
+            					validators: {
+            						stringLength: {
+            							max: inputMax,
+            							message: '長度最大'+inputMax+'位'
+            						},
+            						regexp:project.validators.numberAZOnly
+            					}
+            				};
+            				return numberTextValid;
+            				break;
+            			case "noChinese":
+            				var numberWithCommaOrNotValid={
+            					validators: {
+            						stringLength: {
+            							max: inputMax,
+            							message: '長度最大'+inputMax+'位'
+            						},
+            						regexp:{
+            							message:'不得為中文',
+            							regexp:/[^\u4e00-\u9fa5]/
+            						}
+            					}
+            				};
+            				return numberWithCommaOrNotValid;
+            				break;
+            			case "numberWithDigits":
+            				var numberWithDigitsValid={
+            					validators: {
+            						lessThan:project.validators.number(inputMin,inputMax,true),
+            						regexp:project.validators.numberWithDigits(inputDigits)
+            					}
+            				};
+            				return numberWithDigitsValid;
+            				break;
+            			case "length":
+            				var lengthValid={
+            					validators: {
+            						stringLength: {
+            							max: inputMax,
+            							message: '長度最大'+inputMax+'位'
+            						},
+            					}
+            				};
+            				return lengthValid;
+            				break;
+            			case "azOnly":
+            				var AZOnlyValid={
+            					validators: {
+            						stringLength: {
+            							max: inputMax,
+            							message: '長度最大'+inputMax+'位'
+            						},
+            						regexp:{
+            							message: '請輸入英文',
+            							regexp: /^[a-zA-Z]*$/
+            						}
+            					}
+            				}
+            				return AZOnlyValid;
+            				break;
+            			case "IdNoCheck":
+            				var IdNoValid={
+            					validators: {
+            						stringLength: {
+            							max: inputMax,
+            							message: '長度最大'+inputMax+'位'
+            						},
+            						regexp:project.validators.id
+            					}
+            				};
+            				return IdNoValid;
+            				break;
+            			case "required":
+            				var requiredValid={
+            					validators: {
+            						notEmpty:project.validators.required
+            					}
+            				};
+            				return requiredValid;
+            				break;
+            		}
+            	}
+
+            	var number14Max=100000000000000;
+
+            	$form.bootstrapValidator('addField', '@(colPrefix)AccountId', @(formName)_rule("required",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)PIInstId', @(formName)_rule("numberAZOnly",10,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)Name', @(formName)_rule("length",80,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)IdNo', @(formName)_rule("IdNoCheck",10,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)TaxNo', @(formName)_rule("noChinese",10,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)Account', @(formName)_rule("numberAZOnly",6,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)SubAct', @(formName)_rule("numberAZOnly",10,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)FullName', @(formName)_rule("length",120,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)NameEn', @(formName)_rule("azOnly",120,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)Birthday', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)BusinesSid', @(formName)_rule("numberAZOnly",4,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ComPany', @(formName)_rule("length",80,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)TitleId', @(formName)_rule("numberAZOnly",4,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)Introducer', @(formName)_rule("length",80,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)Memo', @(formName)_rule("length",300,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)RegAddr80', @(formName)_rule("length",80,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ComAddr80', @(formName)_rule("length",80,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ReCommEndUserId', @(formName)_rule("numberAZOnly",8,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)OpenSalesUserId', @(formName)_rule("numberAZOnly",7,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)OpenSalesId', @(formName)_rule("numberAZOnly",3,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)TSEOpenDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)TSEChageDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)TSECStateMemo', @(formName)_rule("length",100,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)OTCOpenDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)OTCChageDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)OTCCStateMemo', @(formName)_rule("length",100,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)TrnsfOpenDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)TrnsfChangEDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)TSCDOpenDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)TSCDCloseDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)TSCDBookDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)TSCDSentDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ReconStaOnDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ReconStaOffDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)TSEWarrSignDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)TSEWarrSOffDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)SubscrSignDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)SubscrSOffDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)PsnSettOnDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)PsnSettOffDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)EmergOpenSalesId', @(formName)_rule("numberAZOnly",7,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)EmergOpenSalesId', @(formName)_rule("numberAZOnly",3,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)EmergOpenDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)EmergChangEDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)EmergCStateMemo', @(formName)_rule("length",100,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)OTCWarrSignDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)OTCWarrSOffDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ETradeSignDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)DMAOpenDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)DMAChangEDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)EmergRMSignDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)EmergRMsOffDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)EmergRMsBuyDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)FirstRMSignDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)AgreementSBL', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ClosureSBL', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)AgreementSBLFuHwa', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ClosureSBLFuHwa', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)IntNetChangEDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)IntNetCStateMemo', @(formName)_rule("length",100,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)IntNetCStateMemo', @(formName)_rule("length",8,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)VoiceQryPwd', @(formName)_rule("length",8,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)VoiceQryPwd', @(formName)_rule("length",4,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)TSCDVoicePwd', @(formName)_rule("length",4,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)YSWDate', @(formName)_rule("dateValid",null,null,null));
+
+            	$form.bootstrapValidator('addField', '@(colPrefix)RegTMCodeId', @(formName)_rule("azOnly",5,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)RegZipCode', @(formName)_rule("numberAZOnly",5,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)RegCounty', @(formName)_rule("numberAZOnly",10,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)RegDistrict', @(formName)_rule("length",10,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)RegNbHood', @(formName)_rule("length",10,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)RegRdsec', @(formName)_rule("length",20,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)RegAddrNo', @(formName)_rule("length",90,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)RegAddrMemo', @(formName)_rule("length",30,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ComTMCodeId', @(formName)_rule("azOnly",30,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ComZipCode', @(formName)_rule("numberAZOnly",5,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ComCounty', @(formName)_rule("numberAZOnly",10,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ComNbHood', @(formName)_rule("length",10,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ComRdsec', @(formName)_rule("length",20,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ComAddrNo', @(formName)_rule("length",90,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)ComAddrMemo', @(formName)_rule("length",30,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)TDefDate', @(formName)_rule("dateValid",null,null,null));
+
+            	$.project.ui.dateRange('@(colPrefix)IWNoWhdBegDate', '@(colPrefix)IWNoWhdEndDate', {isRequired: false});
+
+            	$form.bootstrapValidator('addField', '@(colPrefix)SBDefDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)FIDsCrtDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)FINoRMDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)DTdSignDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)DTdOpenDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)DTdChangEDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)DTdCStateMemo', @(formName)_rule("length",100,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)CostCenter', @(formName)_rule("length",100,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)LIETFOpenDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)FutETFOpenDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)GoldSpotOpenDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)FgnCOpenDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)DtdINSignDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)DtdINOpenDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)DtdINSOffDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)DtdOUTSignDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)DtdOUTOpenDate', @(formName)_rule("dateValid",null,null,null));
+            	$form.bootstrapValidator('addField', '@(colPrefix)DtdOUTSOffDate', @(formName)_rule("dateValid",null,null,null));
+
+            	$form.data('bootstrapValidator').options.excluded = [':disabled']
+            	// $form.bootstrapValidator('addField', '@(colPrefix)IWNoWhdBegDate', @(formName)_rule("dateValid",null,null,null));
+            });
+	</script>
+}
+<!--#endregion-->
+@functions{
+    public List<Column> GetAccountInfoColums()
+    {
+        List<Column> columns = new List<Column>();
+        var tempTable = AccountInfoEntity.__Schema;
+
+        tempTable.GetColumn(x => x.BdAddUserId).Description = "新增人員";
+        tempTable.GetColumn(x => x.BdAddDate).Description = "新增日期時間";
+        tempTable.GetColumn(x => x.BdModUserId).Description = "修改人員";
+        tempTable.GetColumn(x => x.BdModDate).Description = "修改日期時間";
+        tempTable.GetColumn(x => x.AccountId).Description = "帳戶代碼";
+        tempTable.GetColumn(x => x.CostCenter).Description = "成本中心 ";
+        tempTable.GetColumn(x => x.CliType).Description = "客戶類別(大)";
+        tempTable.GetColumn(x => x.CliSubType).Description = "身份別(細)";
+        tempTable.GetColumn(x => x.OpenSrc).Description = "開戶來源";
+        tempTable.GetColumn(x => x.PIInstId).Description = "全委機構代碼";
+        tempTable.GetColumn(x => x.Name).Description = "客戶簡稱";
+        tempTable.GetColumn(x => x.IdNo).Description = "身份證字號";
+        tempTable.GetColumn(x => x.IdNoChk).Description = "身份證字號強迫碼";
+        tempTable.GetColumn(x => x.TaxNo).Description = "稅籍編號";
+        tempTable.GetColumn(x => x.Branch).Description = "分公司";
+        tempTable.GetColumn(x => x.Account).Description = "交易帳戶";
+        tempTable.GetColumn(x => x.ChkNo).Description = "檢查碼";
+        tempTable.GetColumn(x => x.SubAct).Description = "子帳戶";
+        tempTable.GetColumn(x => x.FgMainAct).Description = "是否為主帳戶";
+        tempTable.GetColumn(x => x.FullName).Description = "客戶全名";
+        tempTable.GetColumn(x => x.NameEn).Description = "英文名稱";
+        tempTable.GetColumn(x => x.Birthday).Description = "出生年月日";
+        tempTable.GetColumn(x => x.Gender).Description = "性別";
+        tempTable.GetColumn(x => x.BusinesSid).Description = "職業代碼";
+        tempTable.GetColumn(x => x.ComPany).Description = "公司名稱";
+        tempTable.GetColumn(x => x.TitleId).Description = "職稱代碼";
+        tempTable.GetColumn(x => x.SrcType).Description = "客戶來源";
+        tempTable.GetColumn(x => x.Introducer).Description = "介紹人姓名";
+        tempTable.GetColumn(x => x.Memo).Description = "註記";
+        tempTable.GetColumn(x => x.EduLvl).Description = "教育程度";
+        tempTable.GetColumn(x => x.WorkArea).Description = "工作地點";
+        tempTable.GetColumn(x => x.RegAddr80).Description = "戶籍地";
+        tempTable.GetColumn(x => x.ComAddr80).Description = "通訊地";
+        tempTable.GetColumn(x => x.ReCommEndUserId).Description = "引薦人員編號";
+        tempTable.GetColumn(x => x.FEmpFlag).Description = "外國人員工戶旗標(Y-員工, N-否)";
+        tempTable.GetColumn(x => x.OpenSalesUserId).Description = "集中開戶營業員員編 (7碼)";
+        tempTable.GetColumn(x => x.OpenSalesId).Description = "集中開戶營業員代碼 (3碼)";
+        tempTable.GetColumn(x => x.TSEOpenDate).Description = "集中開戶日";
+        tempTable.GetColumn(x => x.TSEChageDate).Description = "集中狀態異動日";
+        tempTable.GetColumn(x => x.TSECStateMemo).Description = "集中狀態變動註記(lastest)";
+        tempTable.GetColumn(x => x.TSESentFlag).Description = "集中檔案傳送旗標(FT)";
+        tempTable.GetColumn(x => x.OTCOpenDate).Description = "櫃檯開戶日";
+        tempTable.GetColumn(x => x.OTCChageDate).Description = "櫃檯狀態異動日";
+        tempTable.GetColumn(x => x.OTCCStateMemo).Description = "櫃檯狀態變動註記(lastest)";
+        tempTable.GetColumn(x => x.OTCSentFlag).Description = "櫃檯中心傳送旗標(FT)";
+        tempTable.GetColumn(x => x.TrnsfOpenDate).Description = "劃撥開戶日期(款) ";
+        tempTable.GetColumn(x => x.TrnsfChangEDate).Description = "劃撥異動日期(款) ";
+        tempTable.GetColumn(x => x.TSCDOpenDate).Description = "集保開戶日(券)";
+        tempTable.GetColumn(x => x.TSCDCloseDate).Description = "集保解約日(券)";
+        tempTable.GetColumn(x => x.TSCDBookDate).Description = "領摺日期";
+        tempTable.GetColumn(x => x.TSCDSentDate).Description = "集保最近傳檔日(FT)";
+        tempTable.GetColumn(x => x.TSCDSentFlag).Description = "集保傳送旗標(FT)";
+        tempTable.GetColumn(x => x.ReconStaOnDate).Description = "郵寄對帳啟用日期(同新開戶日期)";
+        tempTable.GetColumn(x => x.ReconStaOffDate).Description = "郵寄對帳取消日期(同銷戶日期)";
+        tempTable.GetColumn(x => x.TSEWarrSignDate).Description = "TSE認購權證簽署日期";
+        tempTable.GetColumn(x => x.TSEWarrSOffDate).Description = "TSE認購權證解約日期";
+        tempTable.GetColumn(x => x.SubscrSignDate).Description = "申購簽署日期";
+        tempTable.GetColumn(x => x.SubscrSOffDate).Description = "申購解約日期";
+        tempTable.GetColumn(x => x.PsnSettOnDate).Description = "免辦交割申請日(親臨)";
+        tempTable.GetColumn(x => x.PsnSettOffDate).Description = "免辦交割取消日(親臨)";
+        tempTable.GetColumn(x => x.EmergSalesUserId).Description = "(興櫃)開戶營業員員編 (7碼)";
+        tempTable.GetColumn(x => x.EmergOpenSalesId).Description = "(興櫃)開戶營業員代碼 (3碼)";
+        tempTable.GetColumn(x => x.EmergOpenDate).Description = "興櫃開戶日期=簽署日";
+        tempTable.GetColumn(x => x.EmergChangEDate).Description = "興櫃狀態異動日期    ";
+        tempTable.GetColumn(x => x.EmergCStateMemo).Description = "興櫃狀態變動註記(lastest)";
+        tempTable.GetColumn(x => x.OTCWarrSignDate).Description = "OTC認購權證簽署日期";
+        tempTable.GetColumn(x => x.OTCWarrSOffDate).Description = "OTC認購權證解約日期";
+        tempTable.GetColumn(x => x.ETradeSignDate).Description = "電子交易風險簽署日";
+        tempTable.GetColumn(x => x.ETradeSignType).Description = "簽署來源";
+        tempTable.GetColumn(x => x.DMAOpenDate).Description = "DMA開戶日";
+        tempTable.GetColumn(x => x.DMAChangEDate).Description = "DMA異動日 ";
+        tempTable.GetColumn(x => x.DMATSESendFlag).Description = "DMA交易所檔案傳送旗標";
+        tempTable.GetColumn(x => x.DMAOTCSendFlag).Description = "DMA櫃買傳送旗標(FT)";
+        tempTable.GetColumn(x => x.EmergRMSignDate).Description = "興櫃新風險預告書簽屬日";
+        tempTable.GetColumn(x => x.EmergRMsOffDate).Description = "興櫃新風險預告書註銷日";
+        tempTable.GetColumn(x => x.EmergRMsBuyDate).Description = "興櫃新風險預告書買進生效日";
+        tempTable.GetColumn(x => x.FirstRMSignFlag).Description = "第一上市(櫃)風險股票預告書";
+        tempTable.GetColumn(x => x.FirstRMSignDate).Description = "第一上市(櫃)風險股票簽署日";
+        tempTable.GetColumn(x => x.AgreementSBL).Description = "借券風險預告書簽屬日";
+        tempTable.GetColumn(x => x.ClosureSBL).Description = "借券風險預告書註銷日期";
+        tempTable.GetColumn(x => x.AgreementSBLFuHwa).Description = "借券(復華)風險預告書簽署日期";
+        tempTable.GetColumn(x => x.ClosureSBLFuHwa).Description = "借券(復華)風險預告書註銷日期";
+        tempTable.GetColumn(x => x.IntNetOpenDate).Description = "網際網路申請日期  ";
+        tempTable.GetColumn(x => x.IntNetChangEDate).Description = "網際網路異動日期  ";
+        tempTable.GetColumn(x => x.IntNetChgType).Description = "網際網路狀態";
+        tempTable.GetColumn(x => x.IntNetCStateMemo).Description = "網際網路狀態變動註記(lastest)";
+        tempTable.GetColumn(x => x.IntNetPwd).Description = "網際網路密碼 (歷史,未用)";
+        tempTable.GetColumn(x => x.VoiceQryPwd).Description = "語音查詢密碼(歷史,未用)";
+        tempTable.GetColumn(x => x.TSCDVoicePwd).Description = "集保語音密碼";
+        tempTable.GetColumn(x => x.WebOrdFlag).Description = "網路單";
+        tempTable.GetColumn(x => x.ECChnnlType).Description = "電商旗標 ";
+        tempTable.GetColumn(x => x.QFIICliChk).Description = "9887專用旗標";
+        tempTable.GetColumn(x => x.SubscrSignFlag).Description = "承銷簽屬旗標";
+        tempTable.GetColumn(x => x.CRDBProfFlag).Description = "資券盈虧列印旗標. 在交割單是否顯示資券盈虧";
+        tempTable.GetColumn(x => x.YSWDate).Description = "YESWIN 證券下單免確認申請日";
+        tempTable.GetColumn(x => x.DMAProvider).Description = "DMA線路提供者 ";
+        tempTable.GetColumn(x => x.DVFlag).Description = "客戶版本";
+        tempTable.GetColumn(x => x.TSETrUstsFlag).Description = "信託戶上市傳送旗標(FT)";
+        tempTable.GetColumn(x => x.OTCTrUstsFlag).Description = "信託戶OTC傳送旗標(FT)";
+        tempTable.GetColumn(x => x.RegTMCodeId).Description = "(戶籍)國別";
+        tempTable.GetColumn(x => x.RegZipCode).Description = "(戶籍)郵遞區號";
+        tempTable.GetColumn(x => x.RegCounty).Description = "(戶籍)縣市";
+        tempTable.GetColumn(x => x.RegDistrict).Description = "(戶籍)鄉鎮市區";
+        tempTable.GetColumn(x => x.RegNbHood).Description = "(戶籍)里鄰";
+        tempTable.GetColumn(x => x.RegRdsec).Description = "(戶籍)路段";
+        tempTable.GetColumn(x => x.RegAddrNo).Description = "(戶籍)巷弄號";
+        tempTable.GetColumn(x => x.RegAddrMemo).Description = "(戶籍)註記. ";
+        tempTable.GetColumn(x => x.RegBoxFlag).Description = "(戶籍)是否為郵政信箱";
+        tempTable.GetColumn(x => x.ComTMCodeId).Description = "(通訊)國別";
+        tempTable.GetColumn(x => x.ComZipCode).Description = "(通訊)郵遞區號";
+        tempTable.GetColumn(x => x.ComCounty).Description = "(通訊)縣市";
+        tempTable.GetColumn(x => x.ComDistrict).Description = "(通訊)鄉鎮市區";
+        tempTable.GetColumn(x => x.ComNbHood).Description = "(通訊)里鄰";
+        tempTable.GetColumn(x => x.ComRdsec).Description = "(通訊)路段";
+        tempTable.GetColumn(x => x.ComAddrNo).Description = "(通訊)巷弄號";
+        tempTable.GetColumn(x => x.ComAddrMemo).Description = "(通訊)註記";
+        tempTable.GetColumn(x => x.ComBoxFlag).Description = "(通訊)是否為郵政信箱";
+        tempTable.GetColumn(x => x.RegNrmFlag).Description = "戶籍地整理旗標";
+        tempTable.GetColumn(x => x.ComNrmFlag).Description = "通訊地整理旗標";
+        tempTable.GetColumn(x => x.XRegNrmFlag).Description = "戶籍地址衝突";
+        tempTable.GetColumn(x => x.XComNrmFlag).Description = "通訊地址衝突";
+        tempTable.GetColumn(x => x.YRegNrmFlag).Description = "戶籍地址第三行政區─錯誤";
+        tempTable.GetColumn(x => x.YComNrmFlag).Description = "通訊地址第三行政區─錯誤";
+        tempTable.GetColumn(x => x.WarrOrdFlag).Description = "權證下單旗標";
+        tempTable.GetColumn(x => x.PAmtNoIntFlag).Description = "預收款項放棄利息同意";
+        tempTable.GetColumn(x => x.TDefDate).Description = "當日違約公告日期";
+        tempTable.GetColumn(x => x.IWNoWhdBegDate).Description = "二代健保補充保費-免代扣-起日";
+        tempTable.GetColumn(x => x.IWNoWhdEndDate).Description = "二代健保補充保費-免代扣-迄日";
+        tempTable.GetColumn(x => x.SBClientState).Description = "借券狀態";
+        tempTable.GetColumn(x => x.SBDefDate).Description = "借券(上次)違約日期";
+        tempTable.GetColumn(x => x.FIDsCrtState).Description = "(外國投資人)轉換狀態";
+        tempTable.GetColumn(x => x.FIDsCrtDate).Description = "(外國投資人)一般轉全委日期";
+        tempTable.GetColumn(x => x.FINoRMDate).Description = "(外國投資人) 全委轉一般日期";
+        tempTable.GetColumn(x => x.DTdSignDate).Description = "現股當沖-簽署";
+        tempTable.GetColumn(x => x.DTdOpenDate).Description = "現股當沖-生效日(狀態進入Y/P)";
+        tempTable.GetColumn(x => x.DTdChangEDate).Description = "現股當沖-異動日";
+        tempTable.GetColumn(x => x.DTdCStateMemo).Description = "現股當沖狀態變動註記(lastest)";
+        tempTable.GetColumn(x => x.DTdTSESentFlag).Description = "上市現股當沖";
+        tempTable.GetColumn(x => x.DTdOTCSentFlag).Description = "上櫃現股當沖";
+        tempTable.GetColumn(x => x.DTdPiiFlag).Description = "現股當沖是否專業投資機構";
+        tempTable.GetColumn(x => x.DTdSignSrc).Description = "現股當沖簽署來源";
+        tempTable.GetColumn(x => x.LIETFOpenDate).Description = "槓桿/反向ETF簽署生效日";
+        tempTable.GetColumn(x => x.LIETFSignSrc).Description = "槓桿/反向ETF簽署來源 EEC, P臨櫃";
+        tempTable.GetColumn(x => x.FutETFOpenDate).Description = "期貨(黃金)ETF簽署生效日";
+        tempTable.GetColumn(x => x.FutETFSignSrc).Description = "期貨(黃金)ETF簽署來源";
+        tempTable.GetColumn(x => x.GoldSpotOpenDate).Description = "黃金現貨簽署生效日";
+        tempTable.GetColumn(x => x.GoldSpotSignSrc).Description = "黃金現貨簽署來源";
+        tempTable.GetColumn(x => x.FgnCOpenDate).Description = "外幣商品啟用日";
+        tempTable.GetColumn(x => x.DtdINSignDate).Description = "現股當沖借入簽署日";
+        tempTable.GetColumn(x => x.DtdINOpenDate).Description = "現股當沖借入生效日";
+        tempTable.GetColumn(x => x.DtdINSOffDate).Description = "現股當沖借入註銷日";
+        tempTable.GetColumn(x => x.DtdOUTSignDate).Description = "現股當沖借出簽署日";
+        tempTable.GetColumn(x => x.DtdOUTOpenDate).Description = "現股當沖借出生效日";
+        tempTable.GetColumn(x => x.DtdOUTSOffDate).Description = "現股當沖借出註銷日";
+        tempTable.GetColumn(x => x.DTdIOSignSrc).Description = "現股當沖券差簽署來源";
+        tempTable.GetColumn(x => x.RMBETFOpenDate).Description = "人民幣ETF簽署生效日";
+        tempTable.GetColumn(x => x.RMBETFSignSrc).Description = "人民幣ETF簽署來源";
+        tempTable.GetColumn(x => x.FUTLiETFSignDate).Description = "[期信]槓桿/反向ETF簽署日";
+        tempTable.GetColumn(x => x.FUTLiETFSignSrc).Description = "[期信]槓桿/反向ETF簽署來源";
+
+        #region 時間欄位格式設定
+
+        tempTable.GetColumn(x => x.Birthday).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.TSEOpenDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.TSEChageDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.OTCOpenDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.OTCChageDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.TrnsfOpenDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.TrnsfChangEDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.TSCDOpenDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.TSCDCloseDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.TSCDBookDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.TSCDSentDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.ReconStaOnDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.ReconStaOffDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.TSEWarrSignDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.TSEWarrSOffDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.SubscrSignDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.SubscrSOffDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.PsnSettOnDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.PsnSettOffDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.EmergOpenDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.EmergChangEDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.OTCWarrSignDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.OTCWarrSOffDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.ETradeSignDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.DMAOpenDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.DMAChangEDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.EmergRMSignDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.EmergRMsOffDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.EmergRMsBuyDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.FirstRMSignDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.AgreementSBL).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.ClosureSBL).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.AgreementSBLFuHwa).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.ClosureSBLFuHwa).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.IntNetOpenDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.IntNetChangEDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.YSWDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.TDefDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.IWNoWhdBegDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.IWNoWhdEndDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.SBDefDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.FIDsCrtDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.FINoRMDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.DTdSignDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.DTdOpenDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.DTdChangEDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.LIETFOpenDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.FutETFOpenDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.GoldSpotOpenDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.FgnCOpenDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.DtdINSignDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.DtdINOpenDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.DtdINSOffDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.DtdOUTSignDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.DtdOUTOpenDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.DtdOUTSOffDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.RMBETFOpenDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.FUTLiETFSignDate).Style.Formatter = "CustomTWDateFormatter";
+        tempTable.GetColumn(x => x.OpenSrc).Style.Formatter = "FmtOpenSrc";
+
+        #endregion       
+        foreach (var singleColumn in tempTable.__Columns) {           
+            columns.Add(singleColumn.DeepCopy());
+        }
+        return columns;
+
+    }
+
+
+}

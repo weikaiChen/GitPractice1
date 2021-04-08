@@ -1,0 +1,33 @@
+function bindValidation($form, startId, endId) {
+			var bv = $form.data('bootstrapValidator');
+			var doms = [startId, endId];
+			var rules = {
+				callback: {
+					message: '日期區間錯誤',
+					callback: function (value, validator, $field) {
+						if (config.isRequired
+								||
+							(config.isRequired === false && getJqDom(startId).val() && getJqDom(endId).val())) {
+							return chkDateRange(startId, endId);
+						}
+						else {
+							return true;
+						}
+					}
+				}
+			};
+			if (config.isYM === false) {
+				rules['twEra'] = {
+					message: '日期格式錯誤'
+				};
+			}
+			if (config.isRequired) {
+				rules['notEmpty'] = project.validators.required;
+			}
+			for (var i = 0, domName; domName = doms[i]; i++) {
+				$form.bootstrapValidator('addField', domName, {
+					validators: rules
+				});
+			}
+			$form.data('bootstrapValidator').options.excluded = [':disabled'];
+		}
